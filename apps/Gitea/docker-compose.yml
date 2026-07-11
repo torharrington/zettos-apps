@@ -1,0 +1,103 @@
+name: gitea
+networks:
+  gitea-net:
+    driver: bridge
+
+services:
+  db:
+    image: postgres:15
+    container_name: gitea-db
+    restart: unless-stopped
+    networks:
+      - gitea-net
+    environment:
+      - POSTGRES_USER=gitea
+      - POSTGRES_PASSWORD=gitea
+      - POSTGRES_DB=gitea
+    labels:
+      createdBy: Apps
+    volumes:
+      - /zettos/pool/1/virtual_machine/docker/DATA/installed/Gitea/postgres:/var/lib/postgresql/data
+
+  gitea:
+    image: gitea/gitea:latest
+    container_name: gitea
+    restart: unless-stopped
+    networks:
+      - gitea-net
+    depends_on:
+      - db
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+      # Database Configuration
+      - GITEA__database__DB_TYPE=postgres
+      - GITEA__database__HOST=db:5432
+      - GITEA__database__NAME=gitea
+      - GITEA__database__USER=gitea
+      - GITEA__database__PASSWD=gitea
+      
+      # Server & Security Optimizations
+      - GITEA__server__PROTOCOL=http
+#      - GITEA__server__DOMAIN=YOUR_NAS_IP # <--- e.g., 192.168.1.100
+#      - GITEA__server__ROOT_URL=http://YOUR_NAS_IP:3000/ # <--- e.g., http://192.168.1.100:3000/
+      - GITEA__service__DISABLE_REGISTRATION=true
+      - GITEA__service__SHOW_REGISTRATION_BUTTON=false
+      
+      # Performance & Storage
+      - GITEA__repository__ENABLE_PUSH_CREATE_USER=true
+      - GITEA__repository__DEFAULT_PRIVATE=private
+      - GITEA__server__LFS_START_SERVER=true
+      
+      # UI & Appearance
+      - GITEA__ui__DEFAULT_THEME=arc-green
+      - GITEA__ui__SHOW_USER_EMAIL=false
+    labels:
+      createdBy: Apps
+    ports:
+      - "3000:3000"
+      - "2222:22"
+    volumes:
+      - /zettos/pool/1/virtual_machine/docker/DATA/installed/Gitea/data:/data
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+      - type: bind
+        source: /zettos/raid/non-snapshot/fileservice/share
+        target: /This_NAS
+        bind:
+          propagation: rshared
+
+x-zettos:
+    architectures:
+        - amd64
+    author: Gitea
+    category: Developer
+    description:
+        en_us: |
+          <p>
+          Gitea is a lightweight, self-hosted Git service. This deployment is optimized for private NAS use with a PostgreSQL backend, disabled public registration, and a direct mount to your main NAS storage.
+          </p>
+          <br>
+          <p>
+          <strong>Quick Reference:</strong><br>
+          Web Access: <code>http://YOUR_NAS_IP:3000</code><br>
+          SSH Access: <code>ssh -p 2222 git@YOUR_NAS_IP</code><br>
+          External Files: Accessible at <code>/This_NAS</code> inside the container.
+          </p>
+    developer: Gitea Community
+    icon: Gitea/icon.png
+    index: /
+    main: gitea
+    port_map: "3000"
+    required_memory: 512M
+    scheme: http
+    screenshot_link:
+        - Gitea/screenshot-1.png
+        - Gitea/screenshot-2.png
+        - Gitea/screenshot-3.png
+    tagline:
+        en_us: Git with a cup of tea.
+    thumbnail: Gitea/thumbnail.png
+    title:
+        en_us: Gitea
+    open_in_browser: true
