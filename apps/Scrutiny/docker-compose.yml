@@ -114,7 +114,7 @@ services:
         - container: "8086"
           description:
             en_US: 'Container Port: 8086'
-  x-casaos:
+x-zettos:
     # Supported CPU architectures for this application
     architectures:
       - amd64
@@ -144,3 +144,4 @@ services:
     category: Utilities
     # Default port mapping for the application
     port_map: "38080"
+    open_in_browser: true
