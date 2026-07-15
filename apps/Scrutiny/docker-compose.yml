@@ -1,0 +1,146 @@
+version: '3.5'
+
+services:
+  scrutiny:
+    restart: unless-stopped
+    container_name: scrutiny
+    image: ghcr.io/starosdev/scrutiny:latest-omnibus
+    cap_add:
+      - SYS_RAWIO
+      - SYS_ADMIN # Required for NVMe devices
+    # AppArmor: on systems with AppArmor enforced (TrueNAS SCALE, Ubuntu, Debian),
+    # the default Docker profile blocks raw device I/O even with SYS_RAWIO/SYS_ADMIN.
+    # Option 1 (recommended): load the custom profile on the host, then uncomment:
+    #   sudo cp docker/apparmor-profile /etc/apparmor.d/scrutiny-collector
+    #   sudo apparmor_parser -r /etc/apparmor.d/scrutiny-collector
+    # security_opt:
+    #   - apparmor=scrutiny-collector
+    # Option 2 (less secure): disable AppArmor for this container:
+    # security_opt:
+    #   - apparmor=unconfined
+    ports:
+      - "38080:8080" # webapp
+      - "38086:8086" # influxDB admin
+    volumes:
+      - /run/udev:/run/udev:ro
+      # Mounting devices individually with device tends to work better
+      - /dev:/dev:ro
+      # MDADM: Docker blocks direct mounts into /proc, so the collector
+      # checks /host/proc/mdstat first, then falls back to /proc/mdstat.
+      # Comment out if you don't use MDADM RAID arrays.
+      # This only proves the container can read the host file.
+      # Platforms such as Unraid expose non-standard mdstat content and may
+      # still produce an empty MDADM summary even with this mount present.
+      - /proc/mdstat:/host/proc/mdstat:ro
+      # Btrfs/filesystem collectors: prefer the host mounts table when running
+      # in Docker so container bind mounts do not replace host mount points.
+      - /proc/mounts:/host/proc/mounts:ro
+      - /zettos/pool/1/virtual_machine/docker/DATA/installed/$AppID/config:/opt/scrutiny/config
+      - /zettos/pool/1/virtual_machine/docker/DATA/installed/$AppID/influxdb:/opt/scrutiny/influxdb
+      # Btrfs: if your Btrfs volumes are not visible inside the container,
+      # bind-mount each host volume path (Synology DSM, similar NAS platforms):
+      # - /volume1:/volume1:ro
+      # - /volume2:/volume2:ro
+    environment:
+      # Enable ZFS pool monitoring (uncomment to enable)
+      # See docs/ZFS_POOL_MONITORING.md for details
+      # COLLECTOR_ZFS_CRON_SCHEDULE: "*/15 * * * *"
+      # COLLECTOR_ZFS_RUN_STARTUP: "true"
+      # Enable MDADM RAID monitoring (uncomment to enable)
+      COLLECTOR_MDADM_CRON_SCHEDULE: "*/15 * * * *"
+      COLLECTOR_MDADM_RUN_STARTUP: "true"
+      # Enable Btrfs filesystem monitoring (uncomment to enable)
+      # See docs/BTRFS_FILESYSTEM_MONITORING.md for details
+      COLLECTOR_BTRFS_CRON_SCHEDULE: "*/15 * * * *"
+      COLLECTOR_BTRFS_RUN_STARTUP: "true"
+      # Enable filesystem capacity monitoring (requires host mount visibility)
+      COLLECTOR_FILESYSTEM_CRON_SCHEDULE: "*/15 * * * *"
+      COLLECTOR_FILESYSTEM_RUN_STARTUP: "true"
+      # Authentication (disabled by default, see docs/AUTH.md)
+      # SCRUTINY_WEB_AUTH_ENABLED: 'true'
+      # SCRUTINY_WEB_AUTH_TOKEN: 'your-secret-api-token'
+      # SCRUTINY_WEB_AUTH_ADMIN_PASSWORD: 'your-admin-password'
+      # COLLECTOR_API_TOKEN: 'your-secret-api-token'
+      # Home Assistant MQTT Discovery (disabled by default)
+      # Drives auto-appear in HA when enabled. Requires an MQTT broker.
+      # SCRUTINY_WEB_MQTT_ENABLED: 'true'
+      # SCRUTINY_WEB_MQTT_BROKER: 'tcp://mosquitto:1883'
+      # SCRUTINY_WEB_MQTT_USERNAME: ''
+      # SCRUTINY_WEB_MQTT_PASSWORD: ''
+    devices:
+      - "/dev/sda"
+      - "/dev/sdb"
+      - "/dev/sdc"
+      - "/dev/sdd"
+      - "/dev/sde"
+      - "/dev/sdf"
+      - "/dev/sdg"
+      - "/dev/sdh"
+      # NVMe: pass both controller (for SMART) and namespace (for performance benchmarks)
+      - "/dev/nvme0"
+      - "/dev/nvme0n1"
+    # Allow the container to run in privileged mode.
+    # This is required for Scrutiny to access raw I/O devices.
+    privileged: true
+    # Run a healthcheck on the container to ensure it is running properly
+    # The healthcheck is a simple HTTP request to the /api/health endpoint
+    # If the endpoint returns a 200 status code, the container is considered healthy
+    healthcheck:
+      # The command to run to perform the healthcheck
+      test: ["CMD", "curl", "-f", "http://localhost:38080/api/health"]
+      # The interval between healthchecks
+      interval: 1m30s
+      # The timeout for the healthcheck command
+      timeout: 10s
+      # The number of times to retry the healthcheck if it fails
+      retries: 3
+      # The amount of time to wait after the container starts before running the healthcheck
+      start_period: 40s
+    x-zettos:
+      volumes:
+        - container: /opt/scrutiny/config
+          description:
+            en_US: 'Container Path: /opt/scrutiny/config'
+        - container: /opt/scrutiny/influxdb
+          description:
+            en_US: 'Container Path: /opt/scrutiny/influxdb'
+        - container: /run/udev
+          description:
+            en_US: 'Container Path: /run/udev'
+      ports:
+        - container: "8080"
+          description:
+            en_US: 'Container Port: 8080'
+        - container: "8086"
+          description:
+            en_US: 'Container Port: 8086'
+  x-casaos:
+    # Supported CPU architectures for this application
+    architectures:
+      - amd64
+      - arm64
+    # Stable reverse-domain app identifier
+    id: scrutiny
+    # Main service for this application
+    main: scrutiny
+    # Detailed description for the application
+    description:
+      en_US: If you run a server with more than a couple of hard drives, you're probably already familiar with S.M.A.R.T and the smartd daemon.
+    # Brief tagline for the application
+    tagline:
+      en_US: Monitor your server's hard disk health
+    # Developer's information
+    developer: Starosdev
+    # Author of this particular configuration
+    author: Starosdev
+    # Icon URL for the application
+    icon: https://cdn.jsdelivr.net/gh/selfhst/icons/png/scrutiny.png
+    # Thumbnail image for the application (if any)
+    thumbnail: "https://imgur.com/a/5k8qMzS"
+    # Title for the application
+    title:
+      en_US: Scrutiny
+    # Category under which the application falls
+    category: Utilities
+    # Default port mapping for the application
+    port_map: "38080"
